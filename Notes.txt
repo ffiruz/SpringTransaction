@@ -1,0 +1,79 @@
+Spring de Transaction kullanımı
+
+1.Transaction : Ya hep ya hiç.3 tane operasyonu olan bir iş yaptığımızı düşünürsek , tüm 3 operasyonunda başarılı olması.
+Begin Transaction -> Operation 1, Operation 2 -> Commit(Status : fail or success)
+
+Rollback :Operasyonlardan biri başarısız olduğunda , diğerleri de ger alınır.Mesela bi uygulama yaptık .Kullanıcı sipraiş verdi,ödemeyi aldık.Anca kargo da bir hata çıktı.Bu durumda ödemeyi geri yapmamzı gerek.Status'u da faile çek vs.
+Begin Trancation -> Operation 1 (ödeme),Operation 2(kargo) -> Rollback(Commitleme yapmıyoruz.Onun yerine Rollback yapıyoruz.Operation 1 geri alınır.Opeartion 2 zaten başarısız.)
+
+Spring Transaction :Bir User Service miz olduğunu düşüneli.Ve içerisinde create metodu olsu.Bu create metodunu da Trsanctional olarak belirtelim.
+Spring arkada bizim için bir transaction oluşturuyor.Proxy oluşturuyor.Operasyonları uygulayıp commitliyor.
+Dikkat-->Eğer @Transactional anatasyonunu koyduğumuz metod , private ise Spring bunu kayde almaz.Yani transactional çalışmaz.
+Dikkat--> Eğer crate metodu içinde , aynı class içerisinde başka bir private metodu çağrılırsa,Transactional hiç bir işe yaramaz.
+Burada ki mantık şu.Operation 1 farklı bir class da yapılan işlem ,Operation2 de farklı class dayapılan işlem .Burada biz farklı classlara delege ediyoruz.
+
+
+Transaction Propagation:
+
+Bir metod da transactional başlatıyoruz.Ardında bu metod içinde çağırdığımız operasyon da (Operation 1)  kendi classında bir transaction başaltıyor .Bu böyle gidiyor vs.
+Bunlara bi çözüm getirmeliyiz.Buna da Propagation(Aktarma) ile yapıyoruz.
+Yani mantık şu -> Biz bir transaction başlattığımız da , çağırdığımız metodların kendi classlarında bir transactional olup olmadığını bilmemiz gerek.
+
+Mesela Operation 1  tranaction içerisine dahil olsun Operation 2 olmasın diyebiliriz.Bunu da Propagation ile tanıtabiliriz.
+Propagation type:
+
+1.REQUIRED ->Spring de bir metodu @Transactional anatasyonu ile belirlediğimizde , default olarak Required dır.
+Mesela A metodumuz var ve bu A metodu @Transactional olarak belitilmiş olsun.Burada kendi transactionalı oluşturulmuş olur.
+Mesela A metodumuz içinde B metdomuz çağrılmış olsun.Eğer A metodunu @Transactional olarak tanımlanırsa , B metodunda da aynı transaction devam eder.
+Mesela A metodumuz içinde B metdomuz çağrılmış olsun.Eğer A metodunu @Transactional olarak tanımlanmadığını düünelim bu durumda da , B metodu kendi transactionı nı oluşturur.
+
+2.SUPPORTS -> Eğer A metodu @Transactional(SUPPORTS) ile direk tanımlanırsa , bir transactional durumu olmaz.Yani A metodu içinde yapılanlar bir transactional bütünü oluşturmaz.
+Ama A metodu @Transactional olarak tanımlansın ve B metodudu da A metodu içinde çağrılsın ve B metodu @Transactional(SUPPORTS) olsun.Bu durumda B metodu , A metodunda ki transactionalı kullanır ama A metodunda transactional yoksa kendi transactionını oluşturmaz.
+
+3.NOT_SUPPORTED ->  Eğer A metodu @Transactional(NOT_SUPPORTED) ile direk tanımlanırsa , bir transactional durumu olmaz.Yani A metodu içinde yapılanlar bir transactional bütünü oluşturmaz.
+Ama A metodu @Transactional olarak tanımlansın ve B metodudu da A metodu içinde çağrılsın ve B metodu @Transactional(NOT_SUPPORTED) olsun.Bu durumda B metodu , A metodunda ki transactionı kullanmaz, yani bir nevi transacitional suspende alınır ve tekrar A metodunda bir alt satıra geçtiğinde transactional devam eder.
+Burada k önemli nokta B metodu hiçbir şekilde A metodunda ki transactionalı kullanmıyor.
+
+4.REQUIRES_NEW :Eğer A metodu @Transactional(REQUIRES_NEW) ile direk tanımlanırsa , yeni bir transactional oluşturlur.
+Ama A metodu @Transactional olarak tanımlansın ve B metodudu da A metodu içinde çağrılsın ve B metodu @Transactional(REQUIRES_NEW) olsun.Bu durumda B metodu , A metodunda ki transactionalı kullanmaz.Kendi transactionını kullanır.Kendi krallığı var.:)
+
+5.NEVER:Eğer A metodu @Transactional(NEVER) ile direk tanımlanırsa , yeni bir transactional oluşturlur.
+Ama A metodu @Transactional olarak tanımlansın ve B metodudu da A metodu içinde çağrılsın ve B metodu @Transactional(NEVER) olsun.Bu B metodunda bir exception fırlatır.Ama A metodunuda bir transactional tanımlanmazsa , B metodu da transactional olmdan çalışır.
+
+6.MANDATORY :A metodu @Transactional(MANDATORY) ile direk tanımlanırsa , exception fırlatır.
+Ama A metodu @Transactional olarak tanımlansın ve B metodudu da A metodu içinde çağrılsın ve B metodu @Transactional(MANDATORY) olsun.Bu B metodu A metodunda ki transactionı kullanır.Ama A metodunuda bir transactional tanımlanmazsa , B metodu da exception fırlatır.
+
+
+Not:Transactional class seviyesinde de olur .Metod seviyesinde de olur.Eğer class da transactional verirsek class içined ki tüm metodlar için geçerli olur.Ama metodun üzerinde transactional tanımlarsak , classdan geleni overrite eder.
+
+Not:Concurency çalışmalarda (paralel çalışmalarda) , aynı veriye aynı anda iki tane transactional erişmeye çalıştığında sorunlar oluşabilir.Hangi transactional ın okuduğu veri güncel vs.
+Burada izolasyon tiplerinde aşağıa belittiğimiz gibi sorunlar orata çıkmaktadır.
+İsolation Level in Transactional
+1.Dirty Read:T1 ve T2 adında iki transactionalımız olsun.T1 write() operasyonu çalıştırıyor ve hemen ardından T2 de read() operasyonudan yazılan datayı okuyor.Sonrada T1 , bir nedenden dolayı rollback yapılıyor.İşte bu noktada T2 de ki data kirli datadır.
+2.Non-Repetable Read:T1 ve T2 adında iki transactionalımız olsun.T1 bir read() operasyonu ile bir x datası okusun.Ardından T2 de ise bu x datasını güncelleyip commitleme yapılsın.Ardından tekrar T1 datası read() ile x datasını okuduğunda değelerin farklı olduğu görülür.Bu arada T1 commitlenmeden ikinci read() metodu çağrılıyor.
+3.Phantom Read:T1 ve T2 adında iki transactionalımız olsun.T1 bir read() operasyonu ile 10 ile 20 arasındaki dataları okusun.Ardından T2 de bu aralıkta bir update yapıp commitlesi.Tekrar T1 read() i çekerse farklı değerler gelecek.
+Çünkü biz T1 deki read operasyonlarını bir transanctional içinde yapıyoruz ve transactional bitmeden read ile dataların farklı görünmesi problem.Oysaki her read() den sonra transactionalın commitlenmesi durumunda datalaın farklı gelmesi beklenen bir gelişmedir.
+
+
+Spring Transactional Isolation Levels:
+
+1.ISOLATION_READ_UNCOMMITMEND :Eğer bu şekilde tanımlarsak  Dirty Read, Non-Repetable Read, Phantom Read senaryolarından etkilenir.Bu da bize performans sağlar.Çünkü bu isolation senaryolarını engellemek bize performans kaybı oluşturacak.
+Ama burada veri kirli olabilir.	Burada bazı durumlarda veri versiyonlama da yapılarak hangi verinin güncel olduğu vs görülebilir.
+
+2.ISOLATION_READ_COMMITMEND  :Burada commit edilenleri sadece read edebiliyoruz.Bu nedenle dirty read senaryosunu engellemiş oluyoruz.Yani yukarıda ki senaryoya bakarsak , T1 transactionı commit edilmediği için, T2 de T1 deki bu değişikliği okumayacak.->dirty read senaryosu
+ Ama Non-Repetable Read ve Phantom Read senaryoları yaşanabilir.
+ 
+3. ISOLATION_REPEATABLE_READ : Dirty Read ve  Non-Repetable Read senaryolarını engeller.Ama  Phantom Read senaryosu yaşanabilir.
+
+4. ISOLATION_SERIALIZABLE : Bunu yaptığımız da izolasyın problemlerinin hepsine çözüm üretmiş oluruz.Sequantial olur her şey.Ama performansı düşürür.
+
+
+Bu transactionlar çok önemli.Ürünler veri için vardır ve bu veriler üzerinden para kazaılır.Bu verinin önemi çok fazla ve biz verinin bozulmasını istemeyiz.Verinin turalılığını korumalıyız.
+
+docker run --name some-mysql  -p 3306:3306 -e MYSQL_ROOT_PASSWORD=my-secret-pw -e MYSQL_DATABASE=awesome-spring-transactions -d mysql:5.7
+
+Transactional da transactiona dahil olan herkes ailenin bir üyesi.O aileden biri hastalanırsa, o aile iyi değil diyebiliriz.
+
+Genel de bir teknolojiyi kullanmak için bir driver veya clientını kullanarak erişiriz.Bu client bir transactional ile bir yapı sunursa ki bu genelde -tx şeklindedir.Eğer bu tx supportu varsa transactional şeklinde sunulduğunu anlayabiliriz.
+
+Microservice mimarilerinde olay biraz daha farklıdır.Data nın tutarlılığını korumak için Sega Pattern kullanıyoruz.Değişik patternlarda kullanılabilir.2PC (Two Phase Commit) Pattern da kullanılır ancak çok zordur.
